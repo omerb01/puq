@@ -10,7 +10,7 @@ Uncertainty quantification for inverse problems in imaging has drawn much attent
   <img src="images/demo.gif" />
 </p>
 
-*Animated figure demonstrates the operation of RDA-PUQ*.
+*Animated figure illustrates uncertainty regions produced by RDA-PUQ*.
 
 **TLDR**:
 Given an input image, we aim to predict a linear space called the uncertainty region.
