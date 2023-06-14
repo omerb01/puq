@@ -32,4 +32,4 @@ If you find our paper/code helpful, please cite our paper:
 
 <img src="images/verily.png" alt="verily" width="30%" />
 
-This research was supported by Verily Life Sciences (formerly Google Life Sciences).
+This research was partially supported by Verily Life Sciences (formerly Google Life Sciences).
