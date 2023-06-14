@@ -30,6 +30,6 @@ If you find our paper/code helpful, please cite our paper:
 
 ## Acknowledgments
 
-<img src="images/verily.png" alt="verily" width="50%" />
+<img src="images/verily.png" alt="verily" width="30%" />
 
 This research was supported by Verily Life Sciences (formerly Google Life Sciences).
