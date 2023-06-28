@@ -31,7 +31,7 @@ If you find our paper/code helpful, please cite our paper:
 ## Data
 
 Currently, we make the underlying assumption that a diffusion model has been trained and utilized to sample solutions for any selected image restoration task.
-For your convenience, we provide an illustrative instance of an [example data folder](puq/data/example) comprising 8 images, each accompanied by 10 samples.
+For your convenience, we provide an illustrative instance of an [example data folder](puq/data/example) comprising 8 images, each accompanied by 10 samples specifically related to the image colorization task.
 We adopt the following prescribed structure:
 
     ├── data
