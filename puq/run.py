@@ -1,7 +1,6 @@
 import os
 import logging
 import argparse
-from tqdm import tqdm
 
 import torch
 from torchvision.transforms import transforms as T
@@ -47,26 +46,6 @@ def main(args):
 
     torch.manual_seed(args.seed)
 
-    # DATA INIT
-
-    cal_samples_dataset = DiffusionSamplesDataset(
-        opt=args,
-        calibration=True,
-        transform=T.ToTensor()
-    )
-
-    cal_ground_truths_dataset = GroundTruthsDataset(
-        opt=args,
-        samples_dataset=cal_samples_dataset,
-        transform=T.ToTensor()
-    )
-
-    test_samples_dataset = DiffusionSamplesDataset(
-        opt=args,
-        calibration=False,
-        transform=T.ToTensor()
-    )
-
     # PUQ INIT
 
     if args.method == 'e_puq':
@@ -82,27 +61,35 @@ def main(args):
 
     # CALIBRATION
 
-    puq.calibration(cal_samples_dataset, cal_ground_truths_dataset)
-
-    # INFERENCE
-
-    K = test_samples_dataset.num_samples_per_image
-
-    samples_dataloader = torch.utils.data.DataLoader(
-        test_samples_dataset,
-        batch_size=K,
-        num_workers=args.num_workers,
-        shuffle=False,
-        collate_fn=None if args.patch_res is None else misc.concat_patches
+    cal_samples_dataset = DiffusionSamplesDataset(
+        opt=args,
+        calibration=True,
+        transform=T.ToTensor()
     )
 
-    logging.info('Applying inference...')
-    for samples in tqdm(samples_dataloader):
-        samples = samples.view(samples.shape[0]//K, K, -1)
-        samples = samples[:, :puq.max_pcs]
+    cal_ground_truths_dataset = GroundTruthsDataset(
+        opt=args,
+        samples_dataset=cal_samples_dataset,
+        transform=T.ToTensor()
+    )
 
-        # TODO: Implemetation for metrics evaluations
-        uncertainty_region = puq.inference(samples)
+    puq.calibration(cal_samples_dataset, cal_ground_truths_dataset)
+
+    # EVALUATION
+
+    test_samples_dataset = DiffusionSamplesDataset(
+        opt=args,
+        calibration=False,
+        transform=T.ToTensor()
+    )
+
+    test_ground_truths_dataset = GroundTruthsDataset(
+        opt=args,
+        samples_dataset=test_samples_dataset,
+        transform=T.ToTensor()
+    )
+
+    puq.eval(test_samples_dataset, test_ground_truths_dataset)
 
     logging.info('Done.')
 
