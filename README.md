@@ -39,7 +39,7 @@ We adopt the following prescribed structure:
     │   │   └── images
     │   │       ├── <image-id>.png
     │   └── samples
-    │       ├── <image-id>.png
+    │       ├── <image-id>
     │       │   ├── <sample-id>.png
 
 Training of diffusion models for image restoration tasks can be achieved (for example) through the following approaches:
