@@ -22,6 +22,7 @@ def get_arguments():
     parser.add_argument('--gpu', type=int, default=None, help='GPU index to use, None for CPU.')
     parser.add_argument('--batch', type=int, default=4, help='Batch size to work on.')
     parser.add_argument('--num-workers', type=int, default=0, help='Number of workers for dataloaders.')
+    parser.add_argument('--no-cache', action='store_true', default=False, help='')
 
     # User-specified parameters for statistical guarantees
     parser.add_argument('--alpha', type=float, default=0.1, help='Coverage guarantee parameter.')
@@ -89,7 +90,24 @@ def main(args):
         transform=T.ToTensor()
     )
 
-    puq.eval(test_samples_dataset, test_ground_truths_dataset)
+    results = puq.eval(test_samples_dataset, test_ground_truths_dataset)
+
+    from pathlib import Path
+    import pandas as pd
+    data = {
+        'seed': args.seed,
+        'test_ratio': args.test_ratio,
+        'alpha': args.alpha,
+        'beta': args.beta,
+        'q': args.q,
+        'delta': args.delta
+    }
+    data.update(results)
+    df = pd.DataFrame(data, index=[0])
+    file_path = f'results_{args.data.replace("/",".")}_{args.method}'
+    file_path = f'{file_path}_local{args.patch_res}' if args.patch_res is not None else f'{file_path}_global'
+    file_path = f'{file_path}.csv'
+    df.to_csv(file_path, mode='a', index=False, header=not Path(file_path).is_file())
 
     logging.info('Done.')
 

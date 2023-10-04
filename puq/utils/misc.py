@@ -42,9 +42,35 @@ def split_image_into_patches(image, patch_res):
     return patches.view(patches.shape[0] * patches.shape[1], *patches.shape[2:])
 
 
-def concat_patches(batch):
-    batch = default_collate(batch)
-    batch = batch.transpose(0, 1)
-    shape = batch.shape
-    batch = batch.reshape(shape[0] * shape[1], *shape[2:])
-    return batch
+class SamplesGlobalCollator(object):
+    def __init__(self, K=None):
+        self.K = K
+
+    def __call__(self, batch):
+        batch = default_collate(batch)
+        shape = batch.shape
+        batch = batch.view(shape[0]//self.K, self.K, *shape[1:])
+        return batch
+
+
+class SamplesPatchesCollator(object):
+    def __init__(self, K=None):
+        self.K = K
+
+    def __call__(self, batch):
+        batch = default_collate(batch)
+        shape = batch.shape
+        batch = batch.reshape(shape[0]//self.K, self.K, shape[1], *shape[2:])
+        batch = batch.transpose(1,2)
+        batch = batch.reshape(shape[0] * shape[1], *shape[2:])
+        shape = batch.shape
+        batch = batch.view(shape[0]//self.K, self.K, *shape[1:])
+        return batch
+
+
+class GroundTruthsPatchesCollator(object):
+    def __call__(self, batch):
+        batch = default_collate(batch)
+        shape = batch.shape
+        batch = batch.reshape(shape[0] * shape[1], *shape[2:])
+        return batch

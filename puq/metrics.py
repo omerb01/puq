@@ -34,6 +34,7 @@ def compute_coverage_loss(svs, lower, upper, projected_ground_truths_minus_mean,
     else:
         weights = (selected_sigmas ** 2) / \
             (selected_sigmas ** 2).sum(dim=1, keepdim=True)
+    weights = torch.nan_to_num(weights, 0.0)
     losses = (pcs_masks.unsqueeze(3) * weights.unsqueeze(3)
               * misscoverage.unsqueeze(2)).sum(dim=1)
     return losses
@@ -71,10 +72,11 @@ def reconstruction_risk(pcs, svs, ground_truths_minus_mean, projected_ground_tru
     return reconstruction_losses.mean().item()
 
 
-def interval_size(lower, upper, image_dimension):
-    batch_size = lower.shape[0]
-    interval_size = (upper - lower).sum() / (batch_size + image_dimension)
-    return interval_size.item()
+def interval_size(lower, upper, svs, lambda1):
+    lambda1s = torch.tensor([lambda1], device=svs.device)
+    pcs_masks = compute_pcs_masks(svs, lambda1s)[:, :, 0]
+    intervals = (upper - lower) * pcs_masks
+    return intervals.mean().item()
 
 
 def dimension(svs, lambda1):
@@ -83,10 +85,9 @@ def dimension(svs, lambda1):
     return dim.mean().item()
 
 
-def uncertainty_volume(lower, upper, image_dimension, eps=1e-10):
-    reduced_dimension = lower.shape[1]
-    diff_dimension = image_dimension - reduced_dimension
-    intervals = upper - lower
-    volume = (((intervals + eps).log().sum(dim=1) + diff_dimension *
-              math.log(eps)) / image_dimension).exp() - eps
-    return volume.mean().item()
+def uncertainty_volume(lower, upper, svs, lambda1, eps=1e-10):
+    lambda1s = torch.tensor([lambda1], device=svs.device)
+    pcs_masks = compute_pcs_masks(svs, lambda1s)[:, :, 0]
+    intervals = (upper - lower) * pcs_masks
+    volumes = (intervals + eps).log().mean(dim=1).exp() - eps
+    return volumes.mean().item()

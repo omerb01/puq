@@ -63,7 +63,7 @@ class DiffusionSamplesDataset(torch.utils.data.Dataset):
         samples_ids = []
         for c in subset.imageid_to_sampleid:
             ids = subset.imageid_to_sampleid[c]
-            rand_indices = torch.randperm(len(ids))[:num_samples_per_image]
+            rand_indices = torch.randperm(len(ids), generator=torch.Generator().manual_seed(self.opt.seed))[:num_samples_per_image]
             ids = torch.tensor(ids, dtype=torch.long)[rand_indices].tolist()
             imageid_to_sampleid[c] = list(range(len(samples_ids), len(samples_ids) + len(ids)))
             samples_ids.extend(ids)
@@ -90,3 +90,24 @@ class GroundTruthsDataset(torch.utils.data.Dataset):
         if self.opt.patch_res is not None:
             image = misc.split_image_into_patches(image, self.opt.patch_res)
         return image
+
+
+class DiffusionSamplesDataLoader(torch.utils.data.DataLoader):
+    def __init__(self, samples_dataset, batch_size, patch_res, K, num_workers, shuffle):
+        super().__init__(
+            samples_dataset,
+            batch_size=K*batch_size,
+            num_workers=num_workers,
+            shuffle=shuffle,
+            collate_fn=misc.SamplesGlobalCollator(K) if patch_res is None else misc.SamplesPatchesCollator(K)
+        )
+
+class GroundTruthsDataLoader(torch.utils.data.DataLoader):
+    def __init__(self, ground_truths_dataset, batch_size, patch_res, num_workers, shuffle):
+        super().__init__(
+            ground_truths_dataset,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            shuffle=shuffle,
+            collate_fn=None if patch_res is None else misc.GroundTruthsPatchesCollator()
+        )

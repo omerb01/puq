@@ -1,11 +1,12 @@
 import logging
 from tqdm import tqdm
+from pathlib import Path
 
 import torch
 import numpy as np
 
 import metrics
-from data.data import DiffusionSamplesDataset, GroundTruthsDataset
+from data.data import DiffusionSamplesDataset, GroundTruthsDataset, DiffusionSamplesDataLoader, GroundTruthsDataLoader
 from utils import statistics, misc
 
 
@@ -44,6 +45,9 @@ class PUQUncertaintyRegion:
         raise NotImplementedError
 
     def _compute_intervals(self, samples):
+        if self.max_pcs is not None and samples.shape[1] > self.max_pcs:
+            rand_indices = torch.randperm(samples.shape[1])[:self.max_pcs]
+            samples = samples[:, rand_indices]
 
         # Conditional mean
         mu = samples.mean(dim=1)
@@ -65,12 +69,13 @@ class PUQUncertaintyRegion:
 
         K = dataset.num_samples_per_image
 
-        dataloader = torch.utils.data.DataLoader(
+        dataloader = DiffusionSamplesDataLoader(
             dataset,
-            batch_size=K*self.opt.batch,
+            batch_size=self.opt.batch,
+            patch_res=self.opt.patch_res,
+            K=K,
             num_workers=self.opt.num_workers,
-            shuffle=False,
-            collate_fn=None if self.opt.patch_res is None else misc.concat_patches
+            shuffle=False
         )
 
         all_mu = []
@@ -81,7 +86,7 @@ class PUQUncertaintyRegion:
 
         dataloader = tqdm(dataloader) if verbose else dataloader
         for samples in dataloader:
-            samples = samples.view(samples.shape[0]//K, K, -1).to(self.device)
+            samples = samples.flatten(2).to(self.device)
             mu, pcs, svs, lower, upper = self._compute_intervals(samples)
             all_mu.append(mu.cpu())
             all_pcs.append(pcs.cpu())
@@ -101,12 +106,12 @@ class PUQUncertaintyRegion:
         all_mu, all_pcs, all_svs, all_lower, all_upper = self.approximation(
             samples_dataset, verbose=verbose)
 
-        dataloader = torch.utils.data.DataLoader(
+        dataloader = GroundTruthsDataLoader(
             ground_truths_dataset,
             batch_size=self.opt.batch,
+            patch_res=self.opt.patch_res,
             num_workers=self.opt.num_workers,
-            shuffle=False,
-            collate_fn=None if self.opt.patch_res is None else misc.concat_patches
+            shuffle=False
         )
         dataloader = iter(dataloader)
 
@@ -140,8 +145,19 @@ class PUQUncertaintyRegion:
         return all_losses
 
     def calibration(self, samples_dataset: DiffusionSamplesDataset, ground_truths_dataset: GroundTruthsDataset, verbose=True):
-        loss_table = self._compute_losses(
-            samples_dataset, ground_truths_dataset, verbose=verbose)
+        cache_dir_path = f'cache/{self.opt.method}_{self.opt.data.replace("/","_")}_seed{self.opt.seed}_test{self.opt.test_ratio}_alpha{self.opt.alpha}_beta{self.opt.beta}_q{self.opt.q}'
+        cache_dir_path = cache_dir_path + f'_patch{self.opt.patch_res}' if self.opt.patch_res else cache_dir_path
+
+        if not self.opt.no_cache and Path(cache_dir_path).exists():
+            if verbose:
+                logging.info('Loading approximation phase from cache...')
+            loss_table = torch.load(f'{cache_dir_path}/loss_table.pt')
+        else:
+            loss_table = self._compute_losses(
+                samples_dataset, ground_truths_dataset, verbose=verbose)
+            if not self.opt.no_cache:
+                Path.mkdir(Path(cache_dir_path), exist_ok=True, parents=True)
+                torch.save(loss_table, f'{cache_dir_path}/loss_table.pt')
 
         if verbose:
             logging.info('Applying calibration phase...')
@@ -182,20 +198,21 @@ class PUQUncertaintyRegion:
 
         K = samples_dataset.num_samples_per_image
 
-        samples_dataloader = torch.utils.data.DataLoader(
+        samples_dataloader = DiffusionSamplesDataLoader(
             samples_dataset,
-            batch_size=K*self.opt.batch,
+            batch_size=self.opt.batch,
+            patch_res=self.opt.patch_res,
+            K=K,
             num_workers=self.opt.num_workers,
-            shuffle=False,
-            collate_fn=None if self.opt.patch_res is None else misc.concat_patches
+            shuffle=False
         )
 
-        ground_truths_dataloader = torch.utils.data.DataLoader(
+        ground_truths_dataloader = GroundTruthsDataLoader(
             ground_truths_dataset,
             batch_size=self.opt.batch,
+            patch_res=self.opt.patch_res,
             num_workers=self.opt.num_workers,
-            shuffle=False,
-            collate_fn=None if self.opt.patch_res is None else misc.concat_patches
+            shuffle=False
         )
 
         results_list = []
@@ -205,7 +222,7 @@ class PUQUncertaintyRegion:
             ground_truths_dataloader)) if verbose else dataloader
         for samples, ground_truths in dataloader:
 
-            samples = samples.view(samples.shape[0]//K, K, -1).to(self.device)
+            samples = samples.flatten(2).to(self.device)
             ground_truths = ground_truths.flatten(1).to(self.device)
 
             mu, pcs, svs, lower, upper = self._compute_intervals(samples)
@@ -279,8 +296,8 @@ class EPUQUncertaintyRegion(PUQUncertaintyRegion):
     def _eval_metrics(self, mu, pcs, svs, lower, upper, ground_truths_minus_mean, projected_ground_truths_minus_mean):
         return {
             "coverage_risk": metrics.coverage_risk(svs, lower, upper, projected_ground_truths_minus_mean, lambda1=1.0, lambda2=self.coverage_lambda),
-            "interval_size": metrics.interval_size(lower, upper, mu.shape[1]),
-            "uncertainty_volume": metrics.uncertainty_volume(lower, upper, mu.shape[1])
+            "interval_size": metrics.interval_size(lower, upper, svs, lambda1=1.0),
+            "uncertainty_volume": metrics.uncertainty_volume(lower, upper, svs, lambda1=1.0)
         }
 
 
@@ -340,16 +357,19 @@ class DAPUQUncertaintyRegion(PUQUncertaintyRegion):
         self.reconstruction_lambda = lambda1.item()
         self.coverage_lambda = lambda2.item()
 
-    def _apply_lambdas(self, mu, pcs, svs, lower, upper):
+    def _apply_lambdas(self, mu, pcs, svs, lower, upper, reconstruction_lambda=None, coverage_lambda=None):
+        reconstruction_lambda = reconstruction_lambda if reconstruction_lambda is not None else self.reconstruction_lambda
+        coverage_lambda = coverage_lambda if coverage_lambda is not None else self.coverage_lambda
+
         pcs_masks = metrics.compute_pcs_masks(
-            svs, torch.tensor([self.reconstruction_lambda], device=svs.device))
+            svs, torch.tensor([reconstruction_lambda], device=svs.device))
         pcs_masks = pcs_masks[:, :, 0]
-        pcs = [pcs[:, :, :mask.sum()] for mask in pcs_masks]
-        svs = [svs[:, :mask.sum()] for mask in pcs_masks]
-        lower = [self.coverage_lambda * lower[:, :mask.sum()]
-                 for mask in pcs_masks]
-        upper = [self.coverage_lambda * upper[:, :mask.sum()]
-                 for mask in pcs_masks]
+        pcs = [pcs[i, :, :mask.sum()] for i, mask in enumerate(pcs_masks)]
+        svs = [svs[i, :mask.sum()] for i, mask in enumerate(pcs_masks)]
+        lower = [coverage_lambda * lower[i, :mask.sum()]
+                 for i, mask in enumerate(pcs_masks)]
+        upper = [coverage_lambda * upper[i, :mask.sum()]
+                 for i, mask in enumerate(pcs_masks)]
 
         return mu, pcs, svs, lower, upper
 
@@ -357,9 +377,10 @@ class DAPUQUncertaintyRegion(PUQUncertaintyRegion):
         return {
             "coverage_risk": metrics.coverage_risk(svs, lower, upper, projected_ground_truths_minus_mean, lambda1=self.reconstruction_lambda, lambda2=self.coverage_lambda),
             "reconstruction_risk": metrics.reconstruction_risk(pcs, svs, ground_truths_minus_mean, projected_ground_truths_minus_mean, lambda1=self.reconstruction_lambda, pixel_ratio=self.opt.q),
-            "interval_size": metrics.interval_size(lower, upper, mu.shape[1]),
+            "interval_size": metrics.interval_size(lower, upper, svs, lambda1=self.reconstruction_lambda),
             "dimension": metrics.dimension(svs, lambda1=self.reconstruction_lambda),
-            "uncertainty_volume": metrics.uncertainty_volume(lower, upper, mu.shape[1])
+            "max_dimension": self.max_pcs,
+            "uncertainty_volume": metrics.uncertainty_volume(lower, upper, svs, lambda1=self.reconstruction_lambda)
         }
 
 
@@ -413,15 +434,9 @@ class RDAPUQUncertaintyRegion(DAPUQUncertaintyRegion):
 
         valid_lambdas = torch.cartesian_prod(lambda1s.flip(
             0), lambda2s.flip(0), lambda3s.flip(0))[valid_indices]
-
-        lambda3 = valid_lambdas[:, 2].min()
-        lambda1 = valid_lambdas[valid_lambdas[:, 2] == lambda3, 0].min()
-        lambda2 = valid_lambdas[(valid_lambdas[:, 0] == lambda1) & (
-            valid_lambdas[:, 2] == lambda3), 1].min()
-
-        _, lambda2, lambda3 = valid_lambdas[-1]
-        lambda1 = valid_lambdas[(valid_lambdas[:, 1] == lambda2) & (
-            valid_lambdas[:, 2] == lambda3), 0].min()
+        
+        lambda1, _, lambda3 = valid_lambdas[-1]
+        lambda2 = valid_lambdas[(valid_lambdas[:, 0] == lambda1) & (valid_lambdas[:, 2] == lambda3), 1].min()
 
         if verbose:
             logging.info(
