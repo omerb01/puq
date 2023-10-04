@@ -49,10 +49,13 @@ Training of diffusion models for image restoration tasks can be achieved (for ex
 
 ## Usage
 
+A usage demonstration of our codebase is provided at [demo.ipynb](demo.ipynb)
+
 To clone and install this repository run the following commands:
 
     git clone https://github.com/omerb01/puq.git
     cd puq
+    pip install -e .
 
 To run PUQ (calibration & inference):
 

@@ -5,9 +5,9 @@ from pathlib import Path
 import torch
 import numpy as np
 
-import metrics
-from data.data import DiffusionSamplesDataset, GroundTruthsDataset, DiffusionSamplesDataLoader, GroundTruthsDataLoader
-from utils import statistics, misc
+import puq.metrics as metrics
+from puq.data.data import DiffusionSamplesDataset, GroundTruthsDataset, DiffusionSamplesDataLoader, GroundTruthsDataLoader
+from puq.utils import statistics, misc
 
 
 class PUQUncertaintyRegion:
@@ -73,9 +73,7 @@ class PUQUncertaintyRegion:
             dataset,
             batch_size=self.opt.batch,
             patch_res=self.opt.patch_res,
-            K=K,
-            num_workers=self.opt.num_workers,
-            shuffle=False
+            num_workers=self.opt.num_workers
         )
 
         all_mu = []
@@ -110,8 +108,7 @@ class PUQUncertaintyRegion:
             ground_truths_dataset,
             batch_size=self.opt.batch,
             patch_res=self.opt.patch_res,
-            num_workers=self.opt.num_workers,
-            shuffle=False
+            num_workers=self.opt.num_workers
         )
         dataloader = iter(dataloader)
 
@@ -202,17 +199,14 @@ class PUQUncertaintyRegion:
             samples_dataset,
             batch_size=self.opt.batch,
             patch_res=self.opt.patch_res,
-            K=K,
-            num_workers=self.opt.num_workers,
-            shuffle=False
+            num_workers=self.opt.num_workers
         )
 
         ground_truths_dataloader = GroundTruthsDataLoader(
             ground_truths_dataset,
             batch_size=self.opt.batch,
             patch_res=self.opt.patch_res,
-            num_workers=self.opt.num_workers,
-            shuffle=False
+            num_workers=self.opt.num_workers
         )
 
         results_list = []

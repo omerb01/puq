@@ -4,7 +4,7 @@ import torch
 from torchvision.datasets import ImageFolder
 from torchvision.transforms import transforms as T
 
-from utils import misc
+from puq.utils import misc
 
 
 class DiffusionSamplesDataset(torch.utils.data.Dataset):
@@ -93,21 +93,22 @@ class GroundTruthsDataset(torch.utils.data.Dataset):
 
 
 class DiffusionSamplesDataLoader(torch.utils.data.DataLoader):
-    def __init__(self, samples_dataset, batch_size, patch_res, K, num_workers, shuffle):
+    def __init__(self, samples_dataset, batch_size, patch_res, num_workers):
+        K = samples_dataset.num_samples_per_image
         super().__init__(
             samples_dataset,
             batch_size=K*batch_size,
             num_workers=num_workers,
-            shuffle=shuffle,
+            shuffle=False,
             collate_fn=misc.SamplesGlobalCollator(K) if patch_res is None else misc.SamplesPatchesCollator(K)
         )
 
 class GroundTruthsDataLoader(torch.utils.data.DataLoader):
-    def __init__(self, ground_truths_dataset, batch_size, patch_res, num_workers, shuffle):
+    def __init__(self, ground_truths_dataset, batch_size, patch_res, num_workers):
         super().__init__(
             ground_truths_dataset,
             batch_size=batch_size,
             num_workers=num_workers,
-            shuffle=shuffle,
+            shuffle=False,
             collate_fn=None if patch_res is None else misc.GroundTruthsPatchesCollator()
         )
