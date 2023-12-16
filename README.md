@@ -1,7 +1,8 @@
 # PUQ: Principal Uncertainty Quantification - Leveraging Diffusion Models for Building Tight Uncertainty Regions
 
 This repository contains the official implementation of our paper: [Principal Uncertainty Quantification with Spatial
-Correlation for Image Restoration Problems](https://arxiv.org/abs/2305.10124).
+Correlation for Image Restoration Problems](https://arxiv.org/abs/2305.10124) (**IEEE TPAMI**).\
+This work has also been accepted for the **NeurIPS 2023 Workshop on Deep Learning and Inverse Problems** via [this paper](https://openreview.net/pdf?id=ijSTOcngKs).
 
 **Abstract**:
 Uncertainty quantification for inverse problems in imaging has drawn much attention lately. Existing approaches towards this task define uncertainty regions based on probable values per pixel, while ignoring spatial correlations within the image, resulting in an exaggerated volume of uncertainty. In this paper, we propose PUQ (Principal Uncertainty Quantification) -- a novel definition and corresponding analysis of uncertainty regions that takes into account spatial relationships within the image, thus providing reduced volume regions. Using recent advancements in stochastic generative models, we derive uncertainty intervals around principal components of the empirical posterior distribution, forming an ambiguity region that guarantees the inclusion of true unseen values with a user confidence probability. To improve computational efficiency and interpretability, we also guarantee the recovery of true unseen values using only a few principal directions, resulting in ultimately more informative uncertainty regions. Our approach is verified through experiments on image colorization, super-resolution, and inpainting; its effectiveness is shown through comparison to baseline methods, demonstrating significantly tighter uncertainty regions.
